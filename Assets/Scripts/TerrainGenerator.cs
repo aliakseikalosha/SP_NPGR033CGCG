@@ -46,6 +46,8 @@ public class TerrainGenerator : MonoBehaviour
     int erosionBrushRadiusInt;
     private Mesh mesh;
     private MeshFilter meshFilter;
+    public float MapSize => mapSize * scale;
+    public Vector3 Position => holder.transform.position;
 
     private void Awake()
     {
@@ -118,6 +120,7 @@ public class TerrainGenerator : MonoBehaviour
     {
         float u, v;
         (u, v) = (((float)x) / mapSize, ((float)y) / mapSize);
+
         return Mathf.PerlinNoise(u, v);
     }
 }
