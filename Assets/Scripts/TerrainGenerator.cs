@@ -42,6 +42,12 @@ public class TerrainGenerator : MonoBehaviour
 
     [SerializeField] private float erosionBrushRadius;
 
+    [Header("Noise parameters")]
+    [SerializeField] private float frequency = 1.0f;
+    [SerializeField] private float amplitude = 1.0f;
+    [SerializeField] private int octaves = 1;
+
+
     int mapSizeWithBorder;
     int erosionBrushRadiusInt;
     private Mesh mesh;
@@ -78,7 +84,8 @@ public class TerrainGenerator : MonoBehaviour
 
             Vector2 percent = new Vector2(x / (mapSize - 1f), y / (mapSize - 1f));
             Vector3 pos = new Vector3(percent.x * 2 - 1, 0, percent.y * 2 - 1) * scale;
-            float normalizedHeight = HeightAt(x, y);
+
+            float normalizedHeight = HeightAt(x, y,frequency,amplitude,octaves);
             pos += Vector3.up * normalizedHeight * elevationScale;
             verts[meshMapIndex] = pos;
             uv[meshMapIndex] = percent;
@@ -118,11 +125,17 @@ public class TerrainGenerator : MonoBehaviour
         material.SetFloat("_MaxHeight", elevationScale);
     }
 
-    private float HeightAt(int x, int y)
+    private float HeightAt(int x, int y,float frequency, float amplitude,int octaves)
     {
+        float final_val = 0f;
         float u, v;
-        (u, v) = (((float)x) / mapSize, ((float)y) / mapSize);
-
-        return Mathf.PerlinNoise(u, v);
+        for (int i = 0; i < octaves; i++)
+        {
+            (u, v) = (((float)x) / (mapSize) * frequency, ((float)y) / (mapSize) * frequency);
+            final_val+= amplitude * Mathf.PerlinNoise(u, v);
+            frequency = frequency * 2f;
+            amplitude = amplitude / 2f;
+        }
+        return final_val;
     }
 }
