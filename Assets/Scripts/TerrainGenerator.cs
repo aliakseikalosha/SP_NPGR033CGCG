@@ -46,7 +46,7 @@ public class TerrainGenerator : MonoBehaviour
     int erosionBrushRadiusInt;
     private Mesh mesh;
     private MeshFilter meshFilter;
-    public float MapSize => mapSize * scale;
+    public float MapDimension => 2 * scale;
     public Vector3 Position => holder.transform.position;
 
     private void Awake()
@@ -66,6 +66,7 @@ public class TerrainGenerator : MonoBehaviour
         Init();
         Vector3[] verts = new Vector3[mapSize * mapSize];
         int[] triangles = new int[(mapSize - 1) * (mapSize - 1) * 6];
+        Vector2[] uv = new Vector2[mapSize * mapSize];
         int t = 0;
 
         for (int i = 0; i < mapSize * mapSize; i++)
@@ -77,10 +78,10 @@ public class TerrainGenerator : MonoBehaviour
 
             Vector2 percent = new Vector2(x / (mapSize - 1f), y / (mapSize - 1f));
             Vector3 pos = new Vector3(percent.x * 2 - 1, 0, percent.y * 2 - 1) * scale;
-
             float normalizedHeight = HeightAt(x, y);
             pos += Vector3.up * normalizedHeight * elevationScale;
             verts[meshMapIndex] = pos;
+            uv[meshMapIndex] = percent;
 
             // Construct triangles
             if (x != mapSize - 1 && y != mapSize - 1)
@@ -108,6 +109,7 @@ public class TerrainGenerator : MonoBehaviour
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         mesh.vertices = verts;
         mesh.triangles = triangles;
+        mesh.uv = uv;
         mesh.RecalculateNormals();
 
         meshFilter.sharedMesh = mesh;

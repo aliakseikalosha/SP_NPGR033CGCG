@@ -1,22 +1,44 @@
 ﻿using UnityEngine;
 using System.Linq;
+using System;
 
 public class CloudManager : MonoBehaviour
 {
     [SerializeField] private Cloud[] clouds;
     [SerializeField] private int mapSize = 512;
     [SerializeField] private TerrainGenerator generator;
+    [SerializeField] private LayerMask cloudLayer;
+    [SerializeField] private Material testMaterial;
+
     private Texture2D mask;
-    private float pixelPerUnit => mapSize / generator.MapSize;
+    private float pixelPerUnit => generator.MapDimension / mapSize;
     private bool needUpdate => clouds.Any(c => c.Moved);
+    public Texture2D Mask => mask;
 
     public void Awake()
     {
-        mask = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, false);
+        mask = new Texture2D(mapSize, mapSize, TextureFormat.RGB24, false);
+        UpdateMask();
     }
 
     public void LateUpdate()
     {
+        if (Input.GetMouseButtonUp(0))
+        {
+            var maxDistance = 1000f;
+            var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            Debug.DrawRay(ray.origin, ray.direction * maxDistance, Color.yellow, 1);
+            if (Physics.Raycast(ray, out RaycastHit hit, maxDistance, cloudLayer))
+            {
+                Debug.Log($"Hit : {hit.collider.name}", hit.collider);
+                var cloud = hit.collider.GetComponentInParent<Cloud>();
+                if (cloud)
+                {
+                    Array.ForEach(clouds, c => c.Selected = false);
+                    cloud.Selected = true;
+                }
+            }
+        }
         if (needUpdate)
         {
             UpdateMask();
@@ -29,9 +51,11 @@ public class CloudManager : MonoBehaviour
 
     private Vector2Int ConvertToMaskPosition(Cloud cloud)
     {
-        var pos = Vector2Int.zero;
         var cloudPos = cloud.Position - generator.Position;
-        return pos;
+        var posOnTerrain = (cloudPos - (Vector3.zero -  Vector3.one * generator.MapDimension / 2)) / generator.MapDimension;
+        var posOnTexture = posOnTerrain * mapSize;
+        Debug.Log($"{cloud.name} is at {posOnTerrain} and texture coordinate are {posOnTexture}");
+        return new Vector2Int(Mathf.RoundToInt(posOnTexture.x), Mathf.RoundToInt(posOnTexture.z));
     }
 
     private void UpdateMask()
@@ -40,8 +64,13 @@ public class CloudManager : MonoBehaviour
         foreach (var c in clouds)
         {
             var pos = ConvertToMaskPosition(c);
-            mask.DrawCircle(Color.white, pos.x, pos.y, Mathf.RoundToInt(c.Radius / pixelPerUnit));
+            var color = Color.white;
+            var radius = Mathf.CeilToInt(c.Radius / pixelPerUnit);
+            mask = mask.DrawCircle(color, pos.x, pos.y, radius);
+            Debug.Log($"Color : {color} at position: {pos}, with radius : {radius}", c);
         }
+        mask.Apply();
+        testMaterial.SetTexture("_BaseColorMap", mask);
     }
 }
 public static class Texture2DExt
@@ -52,10 +81,7 @@ public static class Texture2DExt
 
         for (int i = 0; i < pixels.Length; i++)
         {
-            if (pixels[i] == Color.black)
-            {
-                pixels[i] = Color.green;
-            }
+            pixels[i] = Color.black;
         }
         texture.SetPixels(0, 0, texture.width, texture.height, pixels, 0);
         texture.Apply();
@@ -70,7 +96,7 @@ public static class Texture2DExt
             for (int v = y - radius; v < y + radius + 1; v++)
                 if ((x - u) * (x - u) + (y - v) * (y - v) < rSquared)
                     tex.SetPixel(u, v, color);
-
+       // tex.Apply();
         return tex;
     }
 }
