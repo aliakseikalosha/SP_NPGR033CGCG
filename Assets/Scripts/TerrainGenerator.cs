@@ -12,7 +12,7 @@ public class TerrainGeneratorEditor : Editor
     public override void OnInspectorGUI()
     {
         base.OnInspectorGUI();
-        if(GUILayout.Button("Generate Terrain"))
+        if (GUILayout.Button("Generate Terrain"))
         {
             terrainGenerator.ContructMesh();
         }
@@ -54,10 +54,12 @@ public class TerrainGenerator : MonoBehaviour
     private MeshFilter meshFilter;
     public float MapDimension => 2 * scale;
     public Vector3 Position => holder.transform.position;
+    private Texture2D heightMap;
 
     private void Awake()
     {
         Init();
+        ContructMesh();
     }
 
     private void Init()
@@ -65,6 +67,7 @@ public class TerrainGenerator : MonoBehaviour
         erosionBrushRadiusInt = Mathf.CeilToInt(erosionBrushRadius);
         mapSizeWithBorder = mapSize + 2 * erosionBrushRadiusInt;
         meshFilter = holder.GetComponent<MeshFilter>();
+        heightMap = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, false);
     }
 
     public void ContructMesh()
@@ -74,7 +77,7 @@ public class TerrainGenerator : MonoBehaviour
         int[] triangles = new int[(mapSize - 1) * (mapSize - 1) * 6];
         Vector2[] uv = new Vector2[mapSize * mapSize];
         int t = 0;
-
+        var pixels = heightMap.GetPixels32();
         for (int i = 0; i < mapSize * mapSize; i++)
         {
             int x = i % mapSize;
@@ -85,7 +88,8 @@ public class TerrainGenerator : MonoBehaviour
             Vector2 percent = new Vector2(x / (mapSize - 1f), y / (mapSize - 1f));
             Vector3 pos = new Vector3(percent.x * 2 - 1, 0, percent.y * 2 - 1) * scale;
 
-            float normalizedHeight = HeightAt(x, y,frequency,amplitude,octaves);
+            float normalizedHeight = HeightAt(x, y, frequency, amplitude, octaves);
+            pixels[i] = new Color32(0, 0, 0, (byte)Mathf.FloorToInt(byte.MaxValue * normalizedHeight));
             pos += Vector3.up * normalizedHeight * elevationScale;
             verts[meshMapIndex] = pos;
             uv[meshMapIndex] = percent;
@@ -118,21 +122,23 @@ public class TerrainGenerator : MonoBehaviour
         mesh.triangles = triangles;
         mesh.uv = uv;
         mesh.RecalculateNormals();
-
         meshFilter.sharedMesh = mesh;
         holder.sharedMaterial = material;
+        //Update height texture
+        heightMap.SetPixels32(pixels);
+        heightMap.Apply();
 
         material.SetFloat("_MaxHeight", elevationScale);
     }
 
-    private float HeightAt(int x, int y,float frequency, float amplitude,int octaves)
+    private float HeightAt(int x, int y, float frequency, float amplitude, int octaves)
     {
         float final_val = 0f;
         float u, v;
         for (int i = 0; i < octaves; i++)
         {
             (u, v) = (((float)x) / (mapSize) * frequency, ((float)y) / (mapSize) * frequency);
-            final_val+= amplitude * Mathf.PerlinNoise(u, v);
+            final_val += amplitude * Mathf.PerlinNoise(u, v);
             frequency = frequency * 2f;
             amplitude = amplitude / 2f;
         }
