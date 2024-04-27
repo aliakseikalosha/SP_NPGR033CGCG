@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -31,7 +32,7 @@ public class TerrainGeneratorEditor : Editor
 }
 #endif
 
-public class TerrainGenerator : MonoBehaviour
+public class TerrainGenerator : TextureProvider
 {
     [SerializeField] private MeshRenderer holder;
     [SerializeField] private Material material;
@@ -77,7 +78,8 @@ public class TerrainGenerator : MonoBehaviour
         int[] triangles = new int[(mapSize - 1) * (mapSize - 1) * 6];
         Vector2[] uv = new Vector2[mapSize * mapSize];
         int t = 0;
-        var pixels = heightMap.GetPixels32();
+        var pixels = new float[mapSize * mapSize];
+        var max = 0f;
         for (int i = 0; i < mapSize * mapSize; i++)
         {
             int x = i % mapSize;
@@ -89,7 +91,11 @@ public class TerrainGenerator : MonoBehaviour
             Vector3 pos = new Vector3(percent.x * 2 - 1, 0, percent.y * 2 - 1) * scale;
 
             float normalizedHeight = HeightAt(x, y, frequency, amplitude, octaves);
-            pixels[i] = new Color32(0, 0, 0, (byte)Mathf.FloorToInt(byte.MaxValue * normalizedHeight));
+            if (normalizedHeight > max)
+            {
+                max = normalizedHeight;
+            }
+            pixels[i] = normalizedHeight;
             pos += Vector3.up * normalizedHeight * elevationScale;
             verts[meshMapIndex] = pos;
             uv[meshMapIndex] = percent;
@@ -125,7 +131,7 @@ public class TerrainGenerator : MonoBehaviour
         meshFilter.sharedMesh = mesh;
         holder.sharedMaterial = material;
         //Update height texture
-        heightMap.SetPixels32(pixels);
+        heightMap.SetPixels32(pixels.Select(c => new Color32(0, 0, 0, (byte)(Mathf.FloorToInt(255 * c / max)))).ToArray());
         heightMap.Apply();
 
         material.SetFloat("_MaxHeight", elevationScale);
@@ -143,5 +149,10 @@ public class TerrainGenerator : MonoBehaviour
             amplitude = amplitude / 2f;
         }
         return final_val;
+    }
+
+    public override Texture GetTextureBy(string code)
+    {
+        return heightMap;
     }
 }
