@@ -147,10 +147,8 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     data.vertex = pos;
     data.uv = percent;
     
-    
     //Fill buffers
     mesh[meshMapIndex] = data;
-    
     
     if (id.x != mapSize - 1 && id.y != mapSize - 1)
     {
