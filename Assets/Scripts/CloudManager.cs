@@ -2,13 +2,12 @@
 using System.Linq;
 using System;
 
-public class CloudManager : MonoBehaviour
+public class CloudManager : TextureProvider
 {
     [SerializeField] private Cloud[] clouds;
     [SerializeField] private int mapSize = 512;
     [SerializeField] private TerrainGenerator generator;
     [SerializeField] private LayerMask cloudLayer;
-    [SerializeField] private Material testMaterial;
 
     private Texture2D mask;
     private float pixelPerUnit => generator.MapDimension / mapSize;
@@ -17,7 +16,7 @@ public class CloudManager : MonoBehaviour
 
     public void Awake()
     {
-        mask = new Texture2D(mapSize, mapSize, TextureFormat.RGB24, false);
+        mask = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, false);
         UpdateMask();
     }
 
@@ -46,6 +45,7 @@ public class CloudManager : MonoBehaviour
             {
                 cloud.Released();
             }
+            Raise();
         }
     }
 
@@ -70,20 +70,25 @@ public class CloudManager : MonoBehaviour
             Debug.Log($"Color : {color} at position: {pos}, with radius : {radius}", c);
         }
         mask.Apply();
-        testMaterial.SetTexture("_BaseColorMap", mask);
+    }
+
+    public override Texture GetTextureBy(string code)
+    {
+        return mask;
     }
 }
 public static class Texture2DExt
 {
     public static void Clear(this Texture2D texture)
     {
-        Color[] pixels = texture.GetPixels(0, 0, texture.width, texture.height, 0);
+        var pixels = texture.GetPixels32();
 
+        var transparent = new Color32(0, 0, 0, 0);
         for (int i = 0; i < pixels.Length; i++)
         {
-            pixels[i] = Color.black;
+            pixels[i] = transparent;
         }
-        texture.SetPixels(0, 0, texture.width, texture.height, pixels, 0);
+        texture.SetPixels32(pixels);
         texture.Apply();
     }
 
@@ -96,7 +101,7 @@ public static class Texture2DExt
             for (int v = y - radius; v < y + radius + 1; v++)
                 if ((x - u) * (x - u) + (y - v) * (y - v) < rSquared)
                     tex.SetPixel(u, v, color);
-       // tex.Apply();
+
         return tex;
     }
 }
