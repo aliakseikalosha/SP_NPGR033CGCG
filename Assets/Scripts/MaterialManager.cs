@@ -40,7 +40,6 @@ public class MaterialManager : MonoBehaviour
 }
 
 
-
 public abstract class TextureProvider : MonoBehaviour
 {
     public event Action OnTextureUpdate;
