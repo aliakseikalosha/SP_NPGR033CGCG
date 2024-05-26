@@ -1,0 +1,184 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel Erode
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+struct RainDrop
+{
+    float2 position;
+    float2 direction;
+    float velocity;
+    float water;
+    float sediment;
+    int2 gridPoint;
+    float height;
+};
+
+RWBuffer<float> heightMap;
+Buffer<float> weights;
+StructuredBuffer<RainDrop> raindrops;
+
+int mapSize;
+float inertia;
+float capacity;
+float deposition;
+float erosion;
+float evaporation;
+int erosionRadius;
+float minSlope;
+float gravity;
+int maxSteps;
+
+float BiLerp(float4 heights, float2 position)
+{
+    float abu = lerp(heights[0],heights[1],position.x);
+    float cdu = lerp(heights[2],heights[3], position.x);
+    return lerp(abu, cdu, position.y);
+}
+
+//Can come up with some function to effect soil hardness
+float SoilHardness(float3 position)
+{
+    return 1.0;
+}
+
+void ErodeTerrain(float2 position, float sedimentChange)
+{
+    int side = 2 * erosionRadius + 1;
+    int2 gridPos = round(position);
+    for (int y = -erosionRadius; y <= erosionRadius; y++)
+    {
+        for (int x = -erosionRadius; x <= erosionRadius; x++)
+        {
+            int gridX = gridPos.x + x;
+            int gridY = gridPos.y + y;
+            int gridIndex = gridY * mapSize + gridX;
+            if (gridIndex < mapSize * mapSize && gridIndex >= 0)
+            {
+                float weightedSediment = weights[(y + erosionRadius) * side + (x + erosionRadius)] * sedimentChange;
+                float heightChange = (heightMap[gridIndex] < weightedSediment) ? (heightMap[gridIndex]) : weightedSediment;
+                heightMap[gridIndex] -= heightChange;
+            }
+        }
+    }
+}
+
+void Deposit(float2 position, float sedimentChange)
+{
+    int2 flooredPos = floor(position);
+    float2 tilePos = position - flooredPos;
+    float4 weights=
+    {
+        (1 - tilePos.x) * (1 - tilePos.y),
+        tilePos.x * (1 - tilePos.y),
+        (1 - tilePos.x) * tilePos.y,
+        tilePos.x * tilePos.y
+    };
+    
+    int2 pos00 = flooredPos;
+    int2 pos01 = { flooredPos.x, flooredPos.y + 1 };
+    int2 pos10 = { flooredPos.x + 1, flooredPos.y };
+    int2 pos11 = { flooredPos.x + 1, flooredPos.y + 1 };
+
+    heightMap[pos00.y * mapSize + pos00.x] += weights[0] * sedimentChange;
+    heightMap[pos01.y * mapSize + pos01.x] += weights[1] * sedimentChange;
+    heightMap[pos10.y * mapSize + pos10.x] += weights[2] * sedimentChange;
+    heightMap[pos11.y * mapSize + pos11.x] += weights[3] * sedimentChange;
+}
+    
+float4 getNeighbouringVertexHeights(float2 position)
+{
+    int2 flooredPos = floor(position);
+
+    int2 pos00 = flooredPos;
+    int2 pos01 = { flooredPos.x, flooredPos.y + 1 };
+    int2 pos10 = { flooredPos.x + 1, flooredPos.y };
+    int2 pos11 = { flooredPos.x + 1, flooredPos.y + 1 };
+    
+    float4 heights;
+    heights[0] = heightMap[pos00.y * mapSize + pos00.x]; //h00 h01 h10 h11
+    heights[1] = heightMap[pos01.y * mapSize + pos01.x];
+    heights[2] = heightMap[pos10.y * mapSize + pos10.x];
+    heights[3] = heightMap[pos11.y * mapSize + pos11.x];
+    
+    return heights;
+}
+
+float nrand(float2 uv)
+{
+    return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453);
+}
+
+[numthreads(10,1,1)]
+void Erode (uint3 id : SV_DispatchThreadID)
+{
+    RainDrop droplet = raindrops[id.x];
+    for (int i = 0; i < maxSteps;i++)
+    {
+        //Calculate gradients
+        float4 heightsOld = getNeighbouringVertexHeights(droplet.position);
+        
+        float2 dropletOffset = droplet.position - droplet.gridPoint;
+        float2 grad =
+        {
+            (heightsOld[2] - heightsOld[0]) * (1 - dropletOffset.y) + (heightsOld[3] - heightsOld[1]) * dropletOffset.y,
+            (heightsOld[1] - heightsOld[0]) * (1 - dropletOffset.x) + (heightsOld[3] - heightsOld[2]) * dropletOffset.x
+        };
+        //New direction
+        float2 newDir = droplet.direction * inertia - grad * (1 - inertia);
+        float2 seed = {id.x,id.y };
+        if (newDir.x == 0 && newDir.y == 0)
+        {
+            newDir = nrand(seed); //Hope this works:)
+        }
+        newDir = normalize(newDir);
+        
+        //New position, stop if it flowed off the map
+        float2 newPos = droplet.position + newDir;
+        if ((newDir.x == 0 && newDir.y == 0) || newPos.x < 0 || newPos.x >= mapSize - 1 || newPos.y < 0 || newPos.y >= mapSize - 1)
+        {
+            break;
+        }
+        
+        //Calculate new height
+        float4 heightsNew = getNeighbouringVertexHeights(newPos);
+        float newHeight = BiLerp(heightsNew, newPos - floor(newPos));
+        float heightDiff = newHeight - droplet.height;
+        
+        //Based on the height difference and capacity, gain or deposit sediment
+        float sedimentChange;
+        float carryCapacity = max(-heightDiff, minSlope) * droplet.velocity * droplet.water * capacity;
+        if (heightDiff >= 0 || droplet.sediment > carryCapacity)
+        {
+            sedimentChange = heightDiff >= 0 ? min(heightDiff, droplet.sediment) : (droplet.sediment - carryCapacity) * deposition;;
+            Deposit(droplet.position, sedimentChange);
+            droplet.sediment -= sedimentChange;
+        }
+        else
+        {
+            sedimentChange = min((carryCapacity - droplet.sediment) * erosion, -heightDiff);
+            ErodeTerrain(droplet.position, sedimentChange);
+            droplet.sediment += sedimentChange;
+        }
+        
+        //6. Adjust speed
+        float newVelocity = sqrt(droplet.velocity * droplet.velocity - heightDiff * gravity);
+
+        //7. Evaporate water
+        float newWater = droplet.water * (1 - evaporation);
+        if (newWater == 0)
+        {
+            break;
+        }
+
+        //8. Update droplet values
+        droplet.water = newWater;
+        droplet.velocity = newVelocity;
+        droplet.position = newPos;
+        droplet.direction = newDir;
+        droplet.height = newHeight;
+        droplet.gridPoint = floor(droplet.position);
+
+    }
+
+}
