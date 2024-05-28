@@ -3,6 +3,7 @@
 public class Cloud : MonoBehaviour
 {
     [SerializeField] private float speed = 5.0f;
+    [SerializeField] private float radius = 1f;
     //ToDo add support for rotation and custom form(?)
     public Vector3 Position => transform.position;
 
