@@ -81,10 +81,36 @@ public class TerrainGenerator : TextureProvider
     private RainDrop[] raindrops;
     private float[] weights; //Precalculated weights are stored here
 
+    //Set up compute buffers
+    ComputeBuffer raindropsBuffer;
+    ComputeBuffer weightsBuffer;
+    ComputeBuffer heightmapBuffer;
+
     private void Awake()
     {
         Init();
         ContructMesh();
+    }
+
+    private void Start()
+    {
+        raindrops = new RainDrop[numRaindrops];
+        InitRaindrops();
+        InitWeights();
+        InitBuffers();
+    }
+
+    private void Update()
+    {
+        ErodeTerrainGPU();
+        //Change height of the terrain
+        Vector3[] vertices = mesh.vertices;
+        for (int i = 0; i < vertices.Length; i++)
+        {
+            vertices[i].y = heightMap[i];
+        }
+        mesh.vertices = vertices;
+        mesh.RecalculateNormals();
     }
 
     private void Init()
@@ -101,44 +127,58 @@ public class TerrainGenerator : TextureProvider
         public Vector2 uv;
         public float pixel;
     }
-
-    //TODO: Move to compute shader
-    public void StartErosion()
+    
+    public void InitBuffers()
     {
-        print("Erosion started");
-        raindrops = new RainDrop[numRaindrops];
-        InitRaindrops();
-        InitWeights();
-#if GPU
-        //Set up compute buffers
-        ComputeBuffer raindropsBuffer= new ComputeBuffer(numRaindrops,sizeof(float)*8+2*sizeof(int));
-        ComputeBuffer weightsBuffer = new ComputeBuffer((erosionRadius * 2 + 1) * (erosionRadius * 2 + 1), sizeof(float));
-        ComputeBuffer heightmapBuffer = new ComputeBuffer(mapSize * mapSize, sizeof(float));
+        raindropsBuffer = new ComputeBuffer(numRaindrops, sizeof(float) * 8 + 2 * sizeof(int));
+        weightsBuffer = new ComputeBuffer((erosionRadius * 2 + 1) * (erosionRadius * 2 + 1), sizeof(float));
+        heightmapBuffer = new ComputeBuffer(mapSize * mapSize, sizeof(float));
 
-        raindropsBuffer.SetData(raindrops);
-        weightsBuffer.SetData(weights);
-        heightmapBuffer.SetData(heightMap);
-
-        //Set variables
-        erosionSimulator.SetBuffer(0,"weights", weightsBuffer);
-        erosionSimulator.SetBuffer(0, "raindrops", raindropsBuffer);
+        erosionSimulator.SetBuffer(0, "weights", weightsBuffer);
         erosionSimulator.SetBuffer(0, "heightMap", heightmapBuffer);
+        erosionSimulator.SetBuffer(0, "raindrops", raindropsBuffer);
+
+        weightsBuffer.SetData(weights);
 
         erosionSimulator.SetInt("mapSize", mapSize);
-        erosionSimulator.SetFloat("inertia",inertia);
+        erosionSimulator.SetFloat("inertia", inertia);
         erosionSimulator.SetFloat("capacity", capacity);
         erosionSimulator.SetFloat("deposition", deposition);
         erosionSimulator.SetFloat("erosion", erosion);
         erosionSimulator.SetFloat("evaporation", evaporation);
         erosionSimulator.SetInt("erosionRadius", erosionRadius);
-        erosionSimulator.SetFloat("minSplope",minSlope);
+        erosionSimulator.SetFloat("minSplope", minSlope);
         erosionSimulator.SetFloat("gravity", gravity);
         erosionSimulator.SetInt("maxSteps", maxSteps);
 
-        erosionSimulator.Dispatch(0,numRaindrops/10,1,1);
+
+
+    }
+
+    public void ErodeTerrainGPU()
+    {
+        //Set variables
+        InitRaindrops();
+        raindropsBuffer.SetData(raindrops);
+        heightmapBuffer.SetData(heightMap);
+
+        erosionSimulator.Dispatch(0, numRaindrops / 10, 1, 1);
 
         //Get data
         heightmapBuffer.GetData(heightMap);
+    }
+
+    //TODO: Move to compute shader
+    public void StartErosion()
+    {
+        raindrops = new RainDrop[numRaindrops];
+        InitWeights();
+#if GPU
+        InitBuffers();
+        for(int i = 0; i < 100;i++)
+        {
+            ErodeTerrainGPU();
+        }
 
 #elif CPU
         for (int i = 0; i < numRaindrops; i++)
@@ -153,7 +193,6 @@ public class TerrainGenerator : TextureProvider
             }
         }
 #endif
-        print("Erosion ended");
         //Change height of the terrain
         Vector3[] vertices = mesh.vertices;
         for(int i= 0;i<vertices.Length;i++)
