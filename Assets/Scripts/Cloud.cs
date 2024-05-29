@@ -9,7 +9,15 @@ public class Cloud : MonoBehaviour
 
     public bool Moved { get; protected set; }
     public bool Selected { get; set; } = false;
-    public float Radius { get; internal set; } = 0.5f;
+    public float Radius => radius;
+    public Vector2 PositionInside
+    {
+        get
+        {
+            var pos = transform.position;
+            return new Vector2(pos.x, pos.z) + new Vector2(Random.value, Random.value) * Radius;
+        }
+    }
 
     public void Update()
     {

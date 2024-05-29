@@ -20,7 +20,7 @@ public class TerrainGeneratorEditor : Editor
         {
             terrainGenerator.ContructMesh();
         }
-        if(GUILayout.Button("Erode terrain"))
+        if (GUILayout.Button("Erode terrain"))
         {
             terrainGenerator.StartErosion();
         }
@@ -43,6 +43,7 @@ public class TerrainGenerator : TextureProvider
 {
     [SerializeField] private MeshRenderer holder;
     [SerializeField] private Material material;
+    [SerializeField] private CloudManager cloudManager;
 
     [Tooltip("Should be divisible by 16 for the compute shader to work")]
     [SerializeField] private int mapSize = 256;
@@ -118,16 +119,17 @@ public class TerrainGenerator : TextureProvider
         mapSizeWithBorder = mapSize + 2 * erosionRadius;
         meshFilter = holder.GetComponent<MeshFilter>();
         heightMap = new float[mapSize * mapSize];
-        heightMapTexture = new Texture2D(mapSize,mapSize,TextureFormat.Alpha8,true);
-        weights = new float[(erosionRadius*2 + 1)*(erosionRadius*2+1)];
+        heightMapTexture = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, true);
+        weights = new float[(erosionRadius * 2 + 1) * (erosionRadius * 2 + 1)];
     }
 
-    struct meshData {
+    struct meshData
+    {
         public Vector3 vertex;
         public Vector2 uv;
         public float pixel;
     }
-    
+
     public void InitBuffers()
     {
         raindropsBuffer = new ComputeBuffer(numRaindrops, sizeof(float) * 8 + 2 * sizeof(int));
@@ -175,7 +177,7 @@ public class TerrainGenerator : TextureProvider
         InitWeights();
 #if GPU
         InitBuffers();
-        for(int i = 0; i < 100;i++)
+        for (int i = 0; i < 100; i++)
         {
             ErodeTerrainGPU();
         }
@@ -195,9 +197,9 @@ public class TerrainGenerator : TextureProvider
 #endif
         //Change height of the terrain
         Vector3[] vertices = mesh.vertices;
-        for(int i= 0;i<vertices.Length;i++)
+        for (int i = 0; i < vertices.Length; i++)
         {
-            vertices[i].y = heightMap[i]; 
+            vertices[i].y = heightMap[i];
         }
         mesh.vertices = vertices;
         mesh.RecalculateNormals();
@@ -213,7 +215,7 @@ public class TerrainGenerator : TextureProvider
         int[] triangleData = new int[NUM_TRIANGLES];
 
         //Create the buffer, and compute shader here
-        ComputeBuffer vertexBuffer = new ComputeBuffer(NUM_VERTICES, sizeof(float) * (3+2+1));
+        ComputeBuffer vertexBuffer = new ComputeBuffer(NUM_VERTICES, sizeof(float) * (3 + 2 + 1));
         ComputeBuffer triangleBuffer = new ComputeBuffer(NUM_TRIANGLES, sizeof(int));
 
         vertexBuffer.SetData(meshData);
@@ -236,8 +238,8 @@ public class TerrainGenerator : TextureProvider
 
         vertexBuffer.GetData(meshData);
         triangleBuffer.GetData(triangleData);
-        
-        ComposeMesh(meshData,triangleData);
+
+        ComposeMesh(meshData, triangleData);
         meshFilter.sharedMesh = mesh;
         holder.sharedMaterial = material;
         //Update height texture
@@ -302,23 +304,33 @@ public class TerrainGenerator : TextureProvider
     {
         int size = erosionRadius * 2 + 1;
         float sum = 0;
-        for(int y = -erosionRadius;y<=erosionRadius;y++)
+        for (int y = -erosionRadius; y <= erosionRadius; y++)
         {
-            for(int x = -erosionRadius;x<=erosionRadius;x++)
+            for (int x = -erosionRadius; x <= erosionRadius; x++)
             {
                 Vector2 offset = new Vector2(x, y);
-                int weightsOffsetIndex = (y+erosionRadius) * size + (x+erosionRadius);
+                int weightsOffsetIndex = (y + erosionRadius) * size + (x + erosionRadius);
                 float w = (Mathf.Max(0.0f, erosionRadius - offset.magnitude));
                 weights[weightsOffsetIndex] = w;
                 sum += w;
             }
         }
-        weights = weights.Select(c=>c/sum).ToArray();
+        weights = weights.Select(c => c / sum).ToArray();
     }
 
-    private Vector2 randomPosition()
+    private Vector2 RandomPosition()
     {
-        return new Vector2(Random.value,Random.value);
+        return new Vector2(Random.value, Random.value);
+    }
+
+    private Vector2 RandomSpawnRaindrop
+    {
+        get
+        {
+            var pos = cloudManager.RandomCloud.PositionInside;
+            var uvPos = cloudManager.PositonOnTerain(pos);
+            return new Vector2(uvPos.x, uvPos.z);
+        }
     }
 
     private void InitRaindrops()
@@ -326,7 +338,7 @@ public class TerrainGenerator : TextureProvider
         for (int i = 0; i < numRaindrops; i++)
         {
             RainDrop raindrop = new RainDrop();
-            raindrop.position = randomPosition() * (mapSize-2);
+            raindrop.position = RandomSpawnRaindrop * (mapSize - 2);
             raindrop.gridPoint = Vector2Int.FloorToInt(raindrop.position);
             raindrop.direction = Vector2.zero;
             raindrop.sediment = 0;
@@ -365,12 +377,12 @@ public class TerrainGenerator : TextureProvider
         Vector2Int gridPos = Vector2Int.RoundToInt(position); //Choose the closest gridpoint
         for (int y = -erosionRadius; y <= erosionRadius; y++)
         {
-            for(int x=-erosionRadius; x <= erosionRadius; x++)
-            {  
+            for (int x = -erosionRadius; x <= erosionRadius; x++)
+            {
                 int gridX = gridPos.x + x;
                 int gridY = gridPos.y + y;
                 int gridIndex = gridY * mapSize + gridX;
-                if (gridIndex < mapSize * mapSize && gridIndex>=0)
+                if (gridIndex < mapSize * mapSize && gridIndex >= 0)
                 {
                     float weightedSediment = weights[(y + erosionRadius) * side + (x + erosionRadius)] * sedimentChange;
                     float heightChange = (heightMap[gridIndex] < weightedSediment) ? (heightMap[gridIndex]) : weightedSediment;
@@ -396,8 +408,8 @@ public class TerrainGenerator : TextureProvider
         for (int i = 0; i < 4; i++)
         {
             int x = (int)neighbouringPositions[i].x;
-            int  y = (int)neighbouringPositions[i].y;
-            heightMap[y*mapSize+x]+= weights[i] * sedimentChange;
+            int y = (int)neighbouringPositions[i].y;
+            heightMap[y * mapSize + x] += weights[i] * sedimentChange;
         }
     }
 
@@ -405,10 +417,10 @@ public class TerrainGenerator : TextureProvider
     {
         Vector2Int gridPoint = Vector2Int.FloorToInt(position);
         Vector2[] vertexPos = new Vector2[4];
-        vertexPos[0] = new Vector2(gridPoint.x,gridPoint.y);
-        vertexPos[1] = new Vector2(gridPoint.x, gridPoint.y+1);
-        vertexPos[2] = new Vector2(gridPoint.x+1, gridPoint.y);
-        vertexPos[3] = new Vector2(gridPoint.x+1,gridPoint.y+1);
+        vertexPos[0] = new Vector2(gridPoint.x, gridPoint.y);
+        vertexPos[1] = new Vector2(gridPoint.x, gridPoint.y + 1);
+        vertexPos[2] = new Vector2(gridPoint.x + 1, gridPoint.y);
+        vertexPos[3] = new Vector2(gridPoint.x + 1, gridPoint.y + 1);
         return vertexPos;
     }
 
@@ -419,7 +431,7 @@ public class TerrainGenerator : TextureProvider
         float[] heights = new float[4];
         for (int i = 0; i < 4; i++)
         {
-            heights[i] = heightMap[(int)vertexPos[i].y*mapSize+(int)vertexPos[i].x]; //h00 h01 h10 h11
+            heights[i] = heightMap[(int)vertexPos[i].y * mapSize + (int)vertexPos[i].x]; //h00 h01 h10 h11
         }
         return heights;
     }
@@ -440,13 +452,13 @@ public class TerrainGenerator : TextureProvider
         Vector2 newDir = droplet.direction * inertia - grad * (1 - inertia);
         if (newDir == Vector2.zero)
         {
-            newDir = randomPosition();
+            newDir = RandomPosition();
         }
         newDir = newDir.normalized;
 
         //3. New position, stop if it flowed off the map, or if it is not moving.
         Vector2 newPos = droplet.position + newDir;
-        if (newDir==Vector2.zero || newPos.x < 0 || newPos.x >= mapSize - 1 || newPos.y < 0 || newPos.y >= mapSize - 1)
+        if (newDir == Vector2.zero || newPos.x < 0 || newPos.x >= mapSize - 1 || newPos.y < 0 || newPos.y >= mapSize - 1)
         {
             return false;
         }
@@ -457,10 +469,10 @@ public class TerrainGenerator : TextureProvider
         float heightDiff = newHeight - droplet.height;
         //5. Based on height difference, gain or deposit sediment
         float sedimentChange;
-        float carryCapacity = Mathf.Max(-heightDiff,minSlope) * droplet.velocity * droplet.water * capacity;
-        if (heightDiff >= 0 || droplet.sediment>carryCapacity)
+        float carryCapacity = Mathf.Max(-heightDiff, minSlope) * droplet.velocity * droplet.water * capacity;
+        if (heightDiff >= 0 || droplet.sediment > carryCapacity)
         {
-            sedimentChange = heightDiff>=0 ? Mathf.Min(heightDiff,droplet.sediment) : (droplet.sediment - carryCapacity) * deposition; ;
+            sedimentChange = heightDiff >= 0 ? Mathf.Min(heightDiff, droplet.sediment) : (droplet.sediment - carryCapacity) * deposition; ;
             Deposit(droplet.position, sedimentChange);
             droplet.sediment -= sedimentChange;
         }

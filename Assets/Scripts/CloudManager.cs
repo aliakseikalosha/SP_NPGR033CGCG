@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Linq;
 using System;
+using UnityEngine.UIElements;
 
 public class CloudManager : TextureProvider
 {
@@ -10,9 +11,23 @@ public class CloudManager : TextureProvider
     [SerializeField] private LayerMask cloudLayer;
 
     private Texture2D mask;
+    private int lastUsedCloud;
     private float pixelPerUnit => generator.MapDimension / mapSize;
     private bool needUpdate => clouds.Any(c => c.Moved);
     public Texture2D Mask => mask;
+
+    public Cloud RandomCloud
+    {
+        get
+        {
+            if (++lastUsedCloud >= clouds.Length)
+            {
+                lastUsedCloud = 0;
+            }
+            return clouds[lastUsedCloud];
+        }
+    }
+
 
     public void Awake()
     {
@@ -49,12 +64,16 @@ public class CloudManager : TextureProvider
         }
     }
 
+    public Vector3 PositonOnTerain(Vector3 pos)
+    {
+        var cloudPos = pos - generator.Position;
+        var posOnTerrain = (cloudPos - (Vector3.zero - Vector3.one * generator.MapDimension / 2)) / generator.MapDimension;
+        return posOnTerrain;
+    }
+
     private Vector2Int ConvertToMaskPosition(Cloud cloud)
     {
-        var cloudPos = cloud.Position - generator.Position;
-        var posOnTerrain = (cloudPos - (Vector3.zero -  Vector3.one * generator.MapDimension / 2)) / generator.MapDimension;
-        var posOnTexture = posOnTerrain * mapSize;
-        Debug.Log($"{cloud.name} is at {posOnTerrain} and texture coordinate are {posOnTexture}");
+        var posOnTexture = PositonOnTerain(cloud.Position) * mapSize;
         return new Vector2Int(Mathf.RoundToInt(posOnTexture.x), Mathf.RoundToInt(posOnTexture.z));
     }
 
