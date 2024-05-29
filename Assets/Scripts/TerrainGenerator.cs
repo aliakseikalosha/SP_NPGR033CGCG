@@ -72,6 +72,8 @@ public class TerrainGenerator : TextureProvider
     int mapSizeWithBorder;
     private Mesh mesh;
     private MeshFilter meshFilter;
+    private MeshCollider meshCollider;
+
     public float MapDimension => 2 * scale;
     public Vector3 Position => holder.transform.position;
     private float[] heightMap; //Only used for storing the heights, but I don't think a Texture2D is needed for that
@@ -117,6 +119,7 @@ public class TerrainGenerator : TextureProvider
     {
         mapSizeWithBorder = mapSize + 2 * erosionRadius;
         meshFilter = holder.GetComponent<MeshFilter>();
+        meshCollider = holder.GetComponent<MeshCollider>();
         heightMap = new float[mapSize * mapSize];
         heightMapTexture = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, true);
         weights = new float[(erosionRadius * 2 + 1) * (erosionRadius * 2 + 1)];
@@ -237,6 +240,7 @@ public class TerrainGenerator : TextureProvider
 
         ComposeMesh(meshData, triangleData);
         meshFilter.sharedMesh = mesh;
+        meshCollider.sharedMesh = mesh;
         holder.sharedMaterial = material;
         //Update height texture
         float[] pixels = new float[meshData.Length];
