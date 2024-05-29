@@ -329,6 +329,7 @@ public class TerrainGenerator : TextureProvider
         {
             var pos = cloudManager.RandomCloud.PositionInside;
             var uvPos = cloudManager.PositonOnTerain(pos);
+            Debug.Log($"Raindrop position {uvPos}");
             return new Vector2(uvPos.x, uvPos.z);
         }
     }
