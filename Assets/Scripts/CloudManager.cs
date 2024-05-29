@@ -59,6 +59,7 @@ public class CloudManager : TextureProvider
                     }
                     cloud.Selected = true;
                 }
+                return;
             }
             if (Physics.Raycast(ray, out hit, maxDistance, groundLayer))
             {

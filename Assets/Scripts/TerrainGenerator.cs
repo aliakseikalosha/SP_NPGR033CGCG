@@ -3,8 +3,7 @@
 using UnityEngine;
 using System.Linq;
 using System.Collections.Generic;
-using UnityEngine.UIElements;
-using Unity.VisualScripting;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -152,9 +151,6 @@ public class TerrainGenerator : TextureProvider
         erosionSimulator.SetFloat("minSplope", minSlope);
         erosionSimulator.SetFloat("gravity", gravity);
         erosionSimulator.SetInt("maxSteps", maxSteps);
-
-
-
     }
 
     public void ErodeTerrainGPU()
