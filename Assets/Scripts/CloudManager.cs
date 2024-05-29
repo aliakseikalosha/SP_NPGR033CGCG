@@ -1,30 +1,34 @@
 ﻿using UnityEngine;
 using System.Linq;
 using System;
-using UnityEngine.UIElements;
+using System.Collections.Generic;
 
 public class CloudManager : TextureProvider
 {
+    [SerializeField] private StaticCloud prefab;
     [SerializeField] private Cloud[] clouds;
     [SerializeField] private int mapSize = 512;
     [SerializeField] private TerrainGenerator generator;
     [SerializeField] private LayerMask cloudLayer;
+    [SerializeField] private LayerMask groundLayer;
 
     private Texture2D mask;
+    private List<StaticCloud> allClouds = new();
     private int lastUsedCloud;
     private float pixelPerUnit => generator.MapDimension / mapSize;
     private bool needUpdate => clouds.Any(c => c.Moved);
     public Texture2D Mask => mask;
 
-    public Cloud RandomCloud
+    public StaticCloud RandomCloud
     {
         get
         {
-            if (++lastUsedCloud >= clouds.Length)
+            allClouds = allClouds.Where(c => c != null).ToList();
+            if (++lastUsedCloud >= allClouds.Count)
             {
                 lastUsedCloud = 0;
             }
-            return clouds[lastUsedCloud];
+            return allClouds[lastUsedCloud];
         }
     }
 
@@ -32,6 +36,7 @@ public class CloudManager : TextureProvider
     public void Awake()
     {
         mask = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, false);
+        allClouds.AddRange(clouds);
         UpdateMask();
     }
 
@@ -48,9 +53,16 @@ public class CloudManager : TextureProvider
                 var cloud = hit.collider.GetComponentInParent<Cloud>();
                 if (cloud)
                 {
-                    Array.ForEach(clouds, c => c.Selected = false);
+                    foreach (var c in clouds)
+                    {
+                        c.Selected = false;
+                    }
                     cloud.Selected = true;
                 }
+            }
+            if (Physics.Raycast(ray, out hit, maxDistance, groundLayer))
+            {
+                SpawnStaticCloud(ray.origin + ray.direction * hit.distance);
             }
         }
         if (needUpdate)
@@ -62,6 +74,13 @@ public class CloudManager : TextureProvider
             }
             Raise();
         }
+    }
+
+    private void SpawnStaticCloud(Vector3 position)
+    {
+        position.y = clouds[0].Position.y;
+        var c = Instantiate(prefab, position, Quaternion.identity, transform);
+        allClouds.Add(c);
     }
 
     public Vector3 PositonOnTerain(Vector3 pos)
