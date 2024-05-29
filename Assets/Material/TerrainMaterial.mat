@@ -49,10 +49,12 @@ Material:
     - _AlphaCutoffEnable: 0
     - _AlphaDstBlend: 0
     - _AlphaSrcBlend: 1
+    - _Amplitude: 7.4
     - _BlendMode: 0
     - _ConservativeDepthOffsetEnable: 0
     - _CullMode: 2
     - _CullModeForward: 2
+    - _Dark_Grass_Height: 0.6
     - _DepthOffsetEnable: 0
     - _DoubleSidedEnable: 0
     - _DoubleSidedGIMode: 0
@@ -61,6 +63,8 @@ Material:
     - _EnableBlendModePreserveSpecularLighting: 1
     - _EnableFogOnTransparent: 1
     - _ExcludeFromTUAndAA: 0
+    - _Gradient_Scale: 0.1
+    - _Grass_Height: 0.5
     - _OpaqueCullMode: 2
     - _RayTracing: 0
     - _ReceivesSSR: 1
@@ -68,6 +72,7 @@ Material:
     - _RefractionModel: 0
     - _RenderQueueType: 1
     - _RequireSplitLighting: 0
+    - _Snow_Height: 0.9
     - _SrcBlend: 1
     - _StencilRef: 0
     - _StencilRefDepth: 8
@@ -79,6 +84,7 @@ Material:
     - _StencilWriteMaskDistortionVec: 4
     - _StencilWriteMaskGBuffer: 15
     - _StencilWriteMaskMV: 41
+    - _Stone_Height: 0.7
     - _SupportDecals: 1
     - _SurfaceType: 0
     - _TransparentBackfaceEnable: 0
@@ -94,8 +100,13 @@ Material:
     - _ZTestTransparent: 4
     - _ZWrite: 1
     m_Colors:
+    - _Dark_Grass_Color: {r: 0.30588236, g: 0.5411765, b: 0.24313726, a: 0}
     - _DoubleSidedConstants: {r: 1, g: 1, b: -1, a: 0}
     - _EmissionColor: {r: 1, g: 1, b: 1, a: 1}
+    - _Grass_Color: {r: 0.4745098, g: 0.79607844, b: 0.5686275, a: 0}
+    - _Sand_Color: {r: 0.7607843, g: 0.69803923, b: 0.5019608, a: 0}
+    - _Snow_Color: {r: 0.8207547, g: 0.8207547, b: 0.8207547, a: 0}
+    - _Stone_Color: {r: 0.3679245, g: 0.3679245, b: 0.3679245, a: 0}
   m_BuildTextureStacks: []
 --- !u!114 &3988922831034666770
 MonoBehaviour:
