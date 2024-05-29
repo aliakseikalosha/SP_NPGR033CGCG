@@ -57,6 +57,7 @@ public class TerrainGenerator : TextureProvider
     [SerializeField] private Vector2 offset = Vector2.zero;
 
     [Header("Erosion parameters")]
+    [SerializeField] private bool clouds = true;
     [Tooltip("How much the inertia influences the direction set up by the gradient")]
     [SerializeField] private float inertia = 0.1f;
     [Tooltip("Controls how much sediment can the water carry")]
@@ -69,6 +70,7 @@ public class TerrainGenerator : TextureProvider
     [SerializeField] private float gravity = 20;
     [SerializeField] private int maxSteps = 30;
     [SerializeField] private int numRaindrops = 10000;
+    
 
     int mapSizeWithBorder;
     private Mesh mesh;
@@ -177,10 +179,8 @@ public class TerrainGenerator : TextureProvider
         InitWeights();
 #if GPU
         InitBuffers();
-        for (int i = 0; i < 100; i++)
-        {
-            ErodeTerrainGPU();
-        }
+        ErodeTerrainGPU();
+        
 
 #elif CPU
         for (int i = 0; i < numRaindrops; i++)
@@ -329,7 +329,7 @@ public class TerrainGenerator : TextureProvider
         {
             var pos = cloudManager.RandomCloud.PositionInside;
             var uvPos = cloudManager.PositonOnTerain(pos);
-            Debug.Log($"Raindrop position {uvPos}");
+            //Debug.Log($"Raindrop position {uvPos}");
             return new Vector2(uvPos.x, uvPos.z);
         }
     }
@@ -339,7 +339,10 @@ public class TerrainGenerator : TextureProvider
         for (int i = 0; i < numRaindrops; i++)
         {
             RainDrop raindrop = new RainDrop();
-            raindrop.position = RandomSpawnRaindrop * (mapSize - 2);
+            if (clouds)
+                raindrop.position = RandomSpawnRaindrop * (mapSize - 2);
+            else
+                raindrop.position = RandomPosition() * (mapSize - 2);
             raindrop.gridPoint = Vector2Int.FloorToInt(raindrop.position);
             raindrop.direction = Vector2.zero;
             raindrop.sediment = 0;
