@@ -2,9 +2,6 @@
 
 using UnityEngine;
 using System.Linq;
-using System.Collections.Generic;
-using UnityEngine.UIElements;
-using Unity.VisualScripting;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -83,11 +80,13 @@ public class TerrainGenerator : TextureProvider
     public ComputeShader erosionSimulator;
     private RainDrop[] raindrops;
     private float[] weights; //Precalculated weights are stored here
+    private Vector2[] raindropPath;
 
     //Set up compute buffers
     ComputeBuffer raindropsBuffer;
     ComputeBuffer weightsBuffer;
     ComputeBuffer heightmapBuffer;
+    ComputeBuffer raindropPathBuffer;
 
     private void Awake()
     {
@@ -123,6 +122,7 @@ public class TerrainGenerator : TextureProvider
         heightMap = new float[mapSize * mapSize];
         heightMapTexture = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, true);
         weights = new float[(erosionRadius * 2 + 1) * (erosionRadius * 2 + 1)];
+        raindropPath = new Vector2[numRaindrops*maxSteps]; 
     }
 
     struct meshData
@@ -137,10 +137,12 @@ public class TerrainGenerator : TextureProvider
         raindropsBuffer = new ComputeBuffer(numRaindrops, sizeof(float) * 8 + 2 * sizeof(int));
         weightsBuffer = new ComputeBuffer((erosionRadius * 2 + 1) * (erosionRadius * 2 + 1), sizeof(float));
         heightmapBuffer = new ComputeBuffer(mapSize * mapSize, sizeof(float));
+        raindropPathBuffer = new ComputeBuffer(numRaindrops*maxSteps,sizeof(float)*2);
 
         erosionSimulator.SetBuffer(0, "weights", weightsBuffer);
         erosionSimulator.SetBuffer(0, "heightMap", heightmapBuffer);
         erosionSimulator.SetBuffer(0, "raindrops", raindropsBuffer);
+        erosionSimulator.SetBuffer(0,"raindropPath",raindropPathBuffer);
 
         weightsBuffer.SetData(weights);
 
@@ -163,13 +165,17 @@ public class TerrainGenerator : TextureProvider
     {
         //Set variables
         InitRaindrops();
+        System.Array.Clear(raindropPath, 0, raindropPath.Length);
+        raindropPathBuffer.SetData(raindropPath);
         raindropsBuffer.SetData(raindrops);
         heightmapBuffer.SetData(heightMap);
+        raindropPathBuffer.SetData(raindropPath);
 
         erosionSimulator.Dispatch(0, numRaindrops / 10, 1, 1);
 
         //Get data
         heightmapBuffer.GetData(heightMap);
+        raindropPathBuffer.GetData(raindropPath);
     }
 
     //TODO: Move to compute shader
