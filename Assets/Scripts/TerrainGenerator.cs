@@ -2,8 +2,6 @@
 
 using UnityEngine;
 using System.Linq;
-using System.Collections.Generic;
-
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -56,6 +54,7 @@ public class TerrainGenerator : TextureProvider
     [SerializeField] private Vector2 offset = Vector2.zero;
 
     [Header("Erosion parameters")]
+    [SerializeField] private bool clouds = true;
     [Tooltip("How much the inertia influences the direction set up by the gradient")]
     [SerializeField] private float inertia = 0.1f;
     [Tooltip("Controls how much sediment can the water carry")]
@@ -68,6 +67,7 @@ public class TerrainGenerator : TextureProvider
     [SerializeField] private float gravity = 20;
     [SerializeField] private int maxSteps = 30;
     [SerializeField] private int numRaindrops = 10000;
+    
 
     int mapSizeWithBorder;
     private Mesh mesh;
@@ -82,11 +82,13 @@ public class TerrainGenerator : TextureProvider
     public ComputeShader erosionSimulator;
     private RainDrop[] raindrops;
     private float[] weights; //Precalculated weights are stored here
+    private Vector2[] raindropPath;
 
     //Set up compute buffers
     ComputeBuffer raindropsBuffer;
     ComputeBuffer weightsBuffer;
     ComputeBuffer heightmapBuffer;
+    ComputeBuffer raindropPathBuffer;
 
     private void Awake()
     {
@@ -123,6 +125,7 @@ public class TerrainGenerator : TextureProvider
         heightMap = new float[mapSize * mapSize];
         heightMapTexture = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, true);
         weights = new float[(erosionRadius * 2 + 1) * (erosionRadius * 2 + 1)];
+        raindropPath = new Vector2[numRaindrops*maxSteps]; 
     }
 
     struct meshData
@@ -137,10 +140,12 @@ public class TerrainGenerator : TextureProvider
         raindropsBuffer = new ComputeBuffer(numRaindrops, sizeof(float) * 8 + 2 * sizeof(int));
         weightsBuffer = new ComputeBuffer((erosionRadius * 2 + 1) * (erosionRadius * 2 + 1), sizeof(float));
         heightmapBuffer = new ComputeBuffer(mapSize * mapSize, sizeof(float));
+        raindropPathBuffer = new ComputeBuffer(numRaindrops*maxSteps,sizeof(float)*2);
 
         erosionSimulator.SetBuffer(0, "weights", weightsBuffer);
         erosionSimulator.SetBuffer(0, "heightMap", heightmapBuffer);
         erosionSimulator.SetBuffer(0, "raindrops", raindropsBuffer);
+        erosionSimulator.SetBuffer(0,"raindropPath",raindropPathBuffer);
 
         weightsBuffer.SetData(weights);
 
@@ -160,13 +165,17 @@ public class TerrainGenerator : TextureProvider
     {
         //Set variables
         InitRaindrops();
+        System.Array.Clear(raindropPath, 0, raindropPath.Length);
+        raindropPathBuffer.SetData(raindropPath);
         raindropsBuffer.SetData(raindrops);
         heightmapBuffer.SetData(heightMap);
+        raindropPathBuffer.SetData(raindropPath);
 
         erosionSimulator.Dispatch(0, numRaindrops / 10, 1, 1);
 
         //Get data
         heightmapBuffer.GetData(heightMap);
+        raindropPathBuffer.GetData(raindropPath);
     }
 
     //TODO: Move to compute shader
@@ -176,10 +185,8 @@ public class TerrainGenerator : TextureProvider
         InitWeights();
 #if GPU
         InitBuffers();
-        for (int i = 0; i < 100; i++)
-        {
-            ErodeTerrainGPU();
-        }
+        ErodeTerrainGPU();
+        
 
 #elif CPU
         for (int i = 0; i < numRaindrops; i++)
@@ -329,7 +336,6 @@ public class TerrainGenerator : TextureProvider
         {
             var pos = cloudManager.RandomCloud.RandomPositionInside;
             var uvPos = cloudManager.PositonOnTerain(pos);
-
             return new Vector2(Mathf.Clamp01(uvPos.x), Mathf.Clamp01(uvPos.z));
         }
     }
@@ -339,7 +345,10 @@ public class TerrainGenerator : TextureProvider
         for (int i = 0; i < numRaindrops; i++)
         {
             RainDrop raindrop = new RainDrop();
-            raindrop.position = RandomSpawnRaindrop * (mapSize - 2);
+            if (clouds)
+                raindrop.position = RandomSpawnRaindrop * (mapSize - 2);
+            else
+                raindrop.position = RandomPosition() * (mapSize - 2);
             raindrop.gridPoint = Vector2Int.FloorToInt(raindrop.position);
             raindrop.direction = Vector2.zero;
             raindrop.sediment = 0;
