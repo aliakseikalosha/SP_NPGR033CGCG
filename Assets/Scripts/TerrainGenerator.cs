@@ -54,7 +54,7 @@ public class TerrainGenerator : TextureProvider
     [SerializeField] private Vector2 offset = Vector2.zero;
 
     [Header("Erosion parameters")]
-    [SerializeField] private bool clouds = true;
+    [SerializeField] public bool clouds = true;
     [Tooltip("How much the inertia influences the direction set up by the gradient")]
     [SerializeField] private float inertia = 0.1f;
     [Tooltip("Controls how much sediment can the water carry")]

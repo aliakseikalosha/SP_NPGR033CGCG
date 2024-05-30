@@ -106,7 +106,6 @@ public class CloudManager : TextureProvider
             var color = Color.white;
             var radius = Mathf.CeilToInt(c.Radius / pixelPerUnit);
             mask = mask.DrawCircle(color, pos.x, pos.y, radius);
-            Debug.Log($"Color : {color} at position: {pos}, with radius : {radius}", c);
         }
         mask.Apply();
     }
@@ -114,6 +113,14 @@ public class CloudManager : TextureProvider
     public override Texture GetTextureBy(string code)
     {
         return mask;
+    }
+
+    internal void Activate(bool isActive)
+    {
+        foreach (var cloud in allClouds)
+        {
+            cloud.gameObject.SetActive(isActive);
+        }
     }
 }
 public static class Texture2DExt
