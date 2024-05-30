@@ -24,6 +24,7 @@ public class PanZoomOrbitCenter : MonoBehaviour
     [SerializeField] private float rotationSpeed = 500.0f;
     [SerializeField] private float moveSpeed = 10f;
     [SerializeField] private float zoomSpeed = 1f;
+    [SerializeField] private float minDistance = 5f;
 
     private void Update()
     {
@@ -70,6 +71,10 @@ public class PanZoomOrbitCenter : MonoBehaviour
         {
             var dir = (transform.transform.position - orbitCamera.transform.position).normalized;
             orbitCamera.transform.position += Time.deltaTime * zoomDiff * zoomSpeed * dir;
+            if ((transform.transform.position - orbitCamera.transform.position).magnitude < minDistance)
+            {
+                orbitCamera.transform.position = dir * minDistance;
+            }
         }
     }
 }

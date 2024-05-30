@@ -66,15 +66,6 @@ public class CloudManager : TextureProvider
                 SpawnStaticCloud(ray.origin + ray.direction * hit.distance);
             }
         }
-        if (needUpdate)
-        {
-            UpdateMask();
-            foreach (var cloud in clouds)
-            {
-                cloud.Released();
-            }
-            Raise();
-        }
     }
 
     private void SpawnStaticCloud(Vector3 position)
@@ -121,6 +112,7 @@ public class CloudManager : TextureProvider
         {
             cloud.gameObject.SetActive(isActive);
         }
+        enabled = isActive;
     }
 }
 public static class Texture2DExt
