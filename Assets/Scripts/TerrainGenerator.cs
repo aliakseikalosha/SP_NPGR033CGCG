@@ -176,8 +176,7 @@ public class TerrainGenerator : TextureProvider
         heightmapBuffer.SetData(heightMap);
         raindropPathBuffer.SetData(raindropPath);
 
-        //todo: change back to numdrops/10
-        erosionSimulator.Dispatch(0, 1, 1, 1);
+        erosionSimulator.Dispatch(0, numRaindrops / 10, 1, 1);
 
         //Get data
         heightmapBuffer.GetData(heightMap);
@@ -346,6 +345,12 @@ public class TerrainGenerator : TextureProvider
     [SerializeField]
     private int maxDropletVisuals = 100;
     /// <summary>
+    /// Maximum number of spawned visualized droplets per tick.
+    /// </summary>
+    [Tooltip("Maximum number of spawned visualized droplets per tick.")]
+    [SerializeField]
+    private int maxDropletVisualsPerTick = 1;
+    /// <summary>
     /// Width of droplet path visual.
     /// </summary>
     [Tooltip("Width of droplet path visual.")]
@@ -417,7 +422,7 @@ public class TerrainGenerator : TextureProvider
 
         for (int dropletIndex = 0; dropletIndex < numRaindrops; dropletIndex++)
         {
-            if (dropletVisuals.Count >= maxDropletVisuals)
+            if (dropletVisuals.Count >= maxDropletVisuals || dropletIndex >= maxDropletVisualsPerTick)
                 break;
 
             DropletPathVisual visual = new();

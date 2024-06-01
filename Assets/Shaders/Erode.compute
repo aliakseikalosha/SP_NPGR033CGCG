@@ -109,8 +109,7 @@ float nrand(float2 uv)
 {
     return frac(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453);
 }
-//todo: change back to 10
-[numthreads(1,1,1)]
+[numthreads(10,1,1)]
 void Erode (uint3 id : SV_DispatchThreadID)
 {
     RainDrop droplet = raindrops[id.x];
