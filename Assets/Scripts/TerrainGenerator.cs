@@ -2,6 +2,10 @@
 
 using UnityEngine;
 using System.Linq;
+using System.Collections.Generic;
+using UnityEngine.Rendering;
+
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -68,7 +72,6 @@ public class TerrainGenerator : TextureProvider
     [SerializeField] private int maxSteps = 30;
     [SerializeField] private int numRaindrops = 10000;
 
-
     int mapSizeWithBorder;
     private Mesh mesh;
     private MeshFilter meshFilter;
@@ -107,6 +110,7 @@ public class TerrainGenerator : TextureProvider
     private void Update()
     {
         ErodeTerrainGPU();
+        UpdateDropletsVisuals();
         //Change height of the terrain
         Vector3[] vertices = mesh.vertices;
         for (int i = 0; i < vertices.Length; i++)
@@ -126,6 +130,7 @@ public class TerrainGenerator : TextureProvider
         heightMapTexture = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, true);
         weights = new float[(erosionRadius * 2 + 1) * (erosionRadius * 2 + 1)];
         raindropPath = new Vector2[numRaindrops * maxSteps];
+        InitWaterTexture();
     }
 
     struct meshData
@@ -171,7 +176,8 @@ public class TerrainGenerator : TextureProvider
         heightmapBuffer.SetData(heightMap);
         raindropPathBuffer.SetData(raindropPath);
 
-        erosionSimulator.Dispatch(0, numRaindrops / 10, 1, 1);
+        //todo: change back to numdrops/10
+        erosionSimulator.Dispatch(0, 1, 1, 1);
 
         //Get data
         heightmapBuffer.GetData(heightMap);
@@ -201,6 +207,9 @@ public class TerrainGenerator : TextureProvider
             }
         }
 #endif
+        UpdateDropletsVisuals();
+
+
         //Change height of the terrain
         Vector3[] vertices = mesh.vertices;
         for (int i = 0; i < vertices.Length; i++)
@@ -257,7 +266,7 @@ public class TerrainGenerator : TextureProvider
         }
         //Move heightmap to the 0-1 range
         heightMap = pixels;
-        material.SetFloat("_MaxHeight", amplitude);
+        material.SetFloat("_Amplitude", amplitude);
 
         vertexBuffer.Dispose();
         triangleBuffer.Dispose();
@@ -293,6 +302,169 @@ public class TerrainGenerator : TextureProvider
     {
         return heightMapTexture;
     }
+
+    #region Droplet Visuals
+    // could probably be moved to standalone script
+
+    // Possible optimalization: Bath rain droplets spawned during same tick together, they have same color and same
+    // TTL.
+
+    /// <summary>
+    /// Represent a visual for the path of one droplet.
+    /// </summary>
+    struct DropletPathVisual
+    {
+        /// <summary>
+        /// Contains positions of all pixels in water texture which are affected by this path.
+        /// </summary>
+        public List<Vector2Int> Pixels;
+        /// <summary>
+        /// How much seconds remains until path fades.
+        /// </summary>
+        public float TimeToLive;
+    }
+
+    /// <summary>
+    /// Contains all visuals which are currently active (are visible).
+    /// </summary>
+    private List<DropletPathVisual> dropletVisuals = new();
+    /// <summary>
+    /// Texture with water visualisation.
+    /// </summary>
+    private Texture2D waterTexture;
+
+    /// <summary>
+    /// Determine if water visualisation should be enabled.
+    /// </summary>
+    [Tooltip("Determine if water visualisation should be enabled.")]
+    [SerializeField]
+    private bool waterVisualisationEnabled = true;
+    /// <summary>
+    /// Maximum number of visualized droplets (their whole pathes).
+    /// </summary>
+    [Tooltip("Maximum number of visualized droplets (their whole pathes).")]
+    [SerializeField]
+    private int maxDropletVisuals = 100;
+    /// <summary>
+    /// Width of droplet path visual.
+    /// </summary>
+    [Tooltip("Width of droplet path visual.")]
+    [SerializeField]
+    private int visualDropletSize = 10;
+    /// <summary>
+    /// Number of seconds before droplet visual fade away.
+    /// </summary>
+    [Tooltip("Number of seconds before droplet visual fade away.")]
+    [SerializeField]
+    private float dropletVisualsLifetime = 3.0f;
+    /// <summary>
+    /// Color of water droplet visuals.
+    /// </summary>
+    [Tooltip("Color of water droplet visuals.")]
+    [SerializeField]
+    private Color waterColor = Color.blue;
+
+    private void InitWaterTexture()
+    {
+        waterTexture = new Texture2D(mapSize, mapSize);
+        waterTexture.SetPixels(Enumerable.Repeat(Color.black, mapSize * mapSize).ToArray());
+        waterTexture.Apply();
+
+        material.SetTexture("_WaterTexture", waterTexture);
+    }
+
+    /// <summary>
+    /// Update visualisation of water droplets.
+    /// </summary>
+    private void UpdateDropletsVisuals()
+    {
+        // We cant remove droplets while we are processing them so we instead store indices of droplets to remove.
+        List<int> toRemove = new();
+
+        for (int i = 0; i < dropletVisuals.Count; i++)
+        {
+            DropletPathVisual visual = dropletVisuals[i];
+
+            visual.TimeToLive -= Time.deltaTime;
+            if (visual.TimeToLive < 0.0f)
+            {
+                toRemove.Add(i);
+                visual.TimeToLive = 0.0f;
+            }
+
+            dropletVisuals[i] = visual;
+        }
+
+        SpawnDropletVisuals();
+        UpdateWaterTexture();
+
+        // Remove visuals by swapping them with last items and then remove last items (performance reasons).
+        for (int i = 0; i < toRemove.Count; i++)
+        {
+            dropletVisuals[toRemove[i]] = dropletVisuals[dropletVisuals.Count - 1 - i];
+        }
+        dropletVisuals.RemoveRange(dropletVisuals.Count - toRemove.Count, toRemove.Count);
+    }
+
+    /// <summary>
+    /// Spawn new water droplet visuals. Will return immedietly if water visualisation is disabled or maximum number of
+    /// droplet visuals has been reached. 
+    /// </summary>
+    private void SpawnDropletVisuals()
+    {
+        if (!waterVisualisationEnabled || dropletVisuals.Count >= maxDropletVisuals)
+            return;
+
+        for (int dropletIndex = 0; dropletIndex < numRaindrops; dropletIndex++)
+        {
+            if (dropletVisuals.Count >= maxDropletVisuals)
+                break;
+
+            DropletPathVisual visual = new();
+            visual.Pixels = new List<Vector2Int>();
+            visual.TimeToLive = dropletVisualsLifetime;
+
+            for (int stepIndex = 0; stepIndex < maxSteps; stepIndex++)
+            {
+                int pathIndex = dropletIndex * maxSteps + stepIndex;
+                Vector2Int dropletPosition = Vector2Int.RoundToInt(raindropPath[pathIndex]);
+
+                if (dropletPosition == Vector2Int.zero)
+                    break;
+
+                // There is probably an overlap between current step and previous one, but we use very small sizes so
+                // its not that big problem.
+                for (int x = -visualDropletSize / 2; x < visualDropletSize / 2; x++)
+                {
+                    for (int y = -visualDropletSize / 2; y < visualDropletSize / 2; y++)
+                    {
+                        Vector2Int pixelPosition = dropletPosition + new Vector2Int(x, y);
+                        visual.Pixels.Add(pixelPosition);
+                    }
+                }
+            }
+
+            dropletVisuals.Add(visual);
+        }
+    }
+
+    /// <summary>
+    /// Update water visualisation texture.
+    /// </summary>
+    private void UpdateWaterTexture()
+    {
+        foreach (var visual in dropletVisuals)
+        {
+            Color color = Color.Lerp(Color.black, waterColor, visual.TimeToLive / dropletVisualsLifetime);
+
+            foreach (var position in visual.Pixels)
+            {
+                waterTexture.SetPixel(position.x, position.y, color);
+            }
+        }
+        waterTexture.Apply();
+    }
+    #endregion
 
     #region Rainrop simulation
     //Everything from here can be moved to a separate class to keep the code a bit cleaner
