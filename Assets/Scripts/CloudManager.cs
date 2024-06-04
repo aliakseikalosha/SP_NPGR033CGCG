@@ -3,7 +3,7 @@ using System.Linq;
 using System;
 using System.Collections.Generic;
 
-public class CloudManager : TextureProvider
+public class CloudManager : MonoBehaviour
 {
     [SerializeField] private StaticCloud prefab;
     [SerializeField] private Cloud[] clouds;
@@ -12,12 +12,10 @@ public class CloudManager : TextureProvider
     [SerializeField] private LayerMask cloudLayer;
     [SerializeField] private LayerMask groundLayer;
 
-    private Texture2D mask;
     private List<StaticCloud> allClouds = new();
     private int lastUsedCloud;
     private float pixelPerUnit => generator.MapDimension / mapSize;
     private bool needUpdate => clouds.Any(c => c.Moved);
-    public Texture2D Mask => mask;
 
     public StaticCloud RandomCloud
     {
@@ -35,9 +33,7 @@ public class CloudManager : TextureProvider
 
     public void Awake()
     {
-        mask = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, false);
         allClouds.AddRange(clouds);
-        UpdateMask();
     }
 
     public void LateUpdate()
@@ -86,24 +82,6 @@ public class CloudManager : TextureProvider
     {
         var posOnTexture = PositonOnTerain(cloud.Position) * mapSize;
         return new Vector2Int(Mathf.RoundToInt(posOnTexture.x), Mathf.RoundToInt(posOnTexture.z));
-    }
-
-    private void UpdateMask()
-    {
-        mask.Clear();
-        foreach (var c in clouds)
-        {
-            var pos = ConvertToMaskPosition(c);
-            var color = Color.white;
-            var radius = Mathf.CeilToInt(c.Radius / pixelPerUnit);
-            mask = mask.DrawCircle(color, pos.x, pos.y, radius);
-        }
-        mask.Apply();
-    }
-
-    public override Texture GetTextureBy(string code)
-    {
-        return mask;
     }
 
     internal void Activate(bool isActive)

@@ -3,7 +3,7 @@
 using UnityEngine;
 using System.Linq;
 using System.Collections.Generic;
-using UnityEngine.Rendering;
+
 
 
 
@@ -40,7 +40,7 @@ public class TerrainGeneratorEditor : Editor
 }
 #endif
 
-public class TerrainGenerator : TextureProvider
+public class TerrainGenerator : MonoBehaviour
 {
     [SerializeField] private MeshRenderer holder;
     [SerializeField] private Material material;
@@ -80,7 +80,6 @@ public class TerrainGenerator : TextureProvider
     public float MapDimension => 2 * scale;
     public Vector3 Position => holder.transform.position;
     private float[] heightMap; //Only used for storing the heights, but I don't think a Texture2D is needed for that
-    private Texture2D heightMapTexture;
     public ComputeShader heightGenerator;
     public ComputeShader erosionSimulator;
     private RainDrop[] raindrops;
@@ -107,18 +106,21 @@ public class TerrainGenerator : TextureProvider
         InitBuffers();
     }
 
-    private void Update()
+    private void FixedUpdate()
     {
-        ErodeTerrainGPU();
-        UpdateDropletsVisuals();
-        //Change height of the terrain
-        Vector3[] vertices = mesh.vertices;
-        for (int i = 0; i < vertices.Length; i++)
+        if(Time.frameCount % 5 == 0)
         {
-            vertices[i].y = heightMap[i];
+            ErodeTerrainGPU();
+            UpdateDropletsVisuals();
+            //Change height of the terrain
+            Vector3[] vertices = mesh.vertices;
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                vertices[i].y = heightMap[i];
+            }
+            mesh.vertices = vertices;
+            mesh.RecalculateNormals();
         }
-        mesh.vertices = vertices;
-        mesh.RecalculateNormals();
     }
 
     private void Init()
@@ -127,7 +129,6 @@ public class TerrainGenerator : TextureProvider
         meshFilter = holder.GetComponent<MeshFilter>();
         meshCollider = holder.GetComponent<MeshCollider>();
         heightMap = new float[mapSize * mapSize];
-        heightMapTexture = new Texture2D(mapSize, mapSize, TextureFormat.Alpha8, true);
         weights = new float[(erosionRadius * 2 + 1) * (erosionRadius * 2 + 1)];
         raindropPath = new Vector2[numRaindrops * maxSteps];
         InitWaterTexture();
@@ -174,7 +175,6 @@ public class TerrainGenerator : TextureProvider
         raindropPathBuffer.SetData(raindropPath);
         raindropsBuffer.SetData(raindrops);
         heightmapBuffer.SetData(heightMap);
-        raindropPathBuffer.SetData(raindropPath);
 
         erosionSimulator.Dispatch(0, numRaindrops / 10, 1, 1);
 
@@ -295,11 +295,6 @@ public class TerrainGenerator : TextureProvider
         mesh.triangles = triangles;
         mesh.uv = uvs;
         mesh.RecalculateNormals();
-    }
-
-    public override Texture GetTextureBy(string code)
-    {
-        return heightMapTexture;
     }
 
     #region Droplet Visuals
